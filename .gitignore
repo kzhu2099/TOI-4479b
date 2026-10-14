@@ -1,0 +1,10 @@
+__pycache__/
+.venv/
+venv/
+.DS_Store
+
+# Outputs of main.py
+Figure_1.pdf
+Figure_1.png
+TOI_4479_OC_table.csv
+TOI_4479_ephemeris_metadata.json

@@ -1,0 +1,9 @@
+numpy==2.4.6
+scipy==1.18.0
+matplotlib==3.11.0
+seaborn==0.13.2
+astropy==8.0.1
+batman-package==2.5.3
+wotan==1.10
+lightkurve==2.6.0
+ldtk==1.8.6  # only needed to recompute toi4479b_ld_coeffs.json
