@@ -1,6 +1,8 @@
 # TOI-4479 b ephemeris refinement
 
-Code for *A Refined Orbital Period for TOI-4479 b from an Extended TESS Baseline*, Research Notes of the AAS 10, 231 (2026) ([ADS](https://ui.adsabs.harvard.edu/abs/2026RNAAS..10..231Z/abstract)).
+Code for Zhu (2026), *A Refined Orbital Period for TOI-4479 b from an Extended TESS Baseline*, Research Notes of the AAS 10, 231, [doi:10.3847/2515-5172/ae9603](https://doi.org/10.3847/2515-5172/ae9603).
+
+The results (O-C table, figure and ephemeris metadata) are on Zenodo: [doi:10.5281/zenodo.21523403](https://doi.org/10.5281/zenodo.21523403).
 
 `main.py` downloads the TESS SPOC light curves of TOI-4479 (TIC 126606859; sectors 41, 55 and 82), fits a mid-transit time to each transit with the transit shape fixed to Esparza-Borges et al. (2022), and fits a linear ephemeris that is compared with the ExoClock ephemeris of Kokori et al. (2026).
 
