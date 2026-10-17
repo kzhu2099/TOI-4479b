@@ -1,9 +1,9 @@
-"""Refined transit ephemeris of TOI-4479 b from TESS SPOC light curves (Zhu 2026, RNAAS 10, 231).
+'''Refined transit ephemeris of TOI-4479 b from TESS SPOC light curves (Zhu 2026, RNAAS 10, 231).
 
 Fits a mid-transit time to each TESS transit, fits a weighted linear ephemeris and compares it with Kokori et al. (2026). Writes Figure_1 (.pdf/.png), the per-transit O-C table and the ephemeris metadata JSON from the Zenodo deposit.
 
 Usage: python main.py
-"""
+'''
 
 import csv
 import functools
@@ -74,20 +74,17 @@ LD_CITATION = 'Parviainen, H. & Aigrain, S. 2015, MNRAS, 453, 3821 (LDTk); Husse
 QUALITY_BITMASK = 'default'
 DETREND_WINDOW = 0.3         # days, ~6x the transit duration
 DETREND_MASK_FACTOR = 2.2    # width of the in-transit mask, in transit durations
-FIT_HALF_WINDOW_HOURS = 4.0  # fit +/-4 hr around each predicted T0
+FIT_HALF_WINDOW_HR = 4.0  # fit +/-4 hr around each predicted T0
 MIN_DATAPOINTS = 20
 MAX_T0_ERR = 0.03            # days; only meant to catch failed fits
-JACKKNIFE_SIGMA_THRESH = 4.0
+JACKKNIFE_SIGMA = 4.0
 
 PHASE_FOLD_WINDOW_HR = 3     # half-width of the phase-fold panels
 PHASE_BIN_MINUTES = 5.0
 OUTLINE_EDGE_PAD_HR = 2.0    # model curves extend past the panel edges by this much
 
-
-# ---- Data ----
-
 def fetch_data():
-    """Download and stitch the SPOC light curves. Returns time, flux, flux_err, sector."""
+    '''Download and stitch the SPOC light curves. Returns time, flux, flux_err, sector.'''
     import lightkurve as lk
 
     print(f'Downloading TESS SPOC light curves for {MAST_SEARCH_ID}...')
@@ -112,9 +109,8 @@ def fetch_data():
     mask = (np.abs(flux - np.median(flux)) < (5 * np.std(flux))) & np.isfinite(flux_err)
     return time[mask], flux[mask], flux_err[mask], sector[mask]
 
-
 def detrend(time, flux, sector):
-    """Transit-masked biweight filter, then each sector rescaled so its out-of-transit median is 1."""
+    '''Transit-masked biweight filter, then each sector rescaled so its out-of-transit median is 1.'''
     in_transit = transit_mask(time=time, period=LIT_PERIOD, duration=LIT_DURATION_DAYS * DETREND_MASK_FACTOR, T0=LIT_T0_BTJD)
     flat_flux, _ = flatten(time, flux, window_length=DETREND_WINDOW, method='biweight', mask=in_transit, return_trend=True)
     for s in np.unique(sector):
@@ -122,9 +118,8 @@ def detrend(time, flux, sector):
         flat_flux[sel] = flat_flux[sel] / np.median(flat_flux[sel & ~in_transit])
     return flat_flux
 
-
 def bls_seed(time, flat_flux):
-    """BLS search near the literature period, to seed the individual T0 fits."""
+    '''BLS search near the literature period, to seed the individual T0 fits.'''
     periods = np.linspace(LIT_PERIOD - 0.15, LIT_PERIOD + 0.15, 100000)
     durations = np.linspace(LIT_DURATION_DAYS * 0.7, LIT_DURATION_DAYS * 1.3, 5)
     res = BoxLeastSquares(time, flat_flux).power(periods, durations)
@@ -135,12 +130,9 @@ def bls_seed(time, flat_flux):
     t0 = t0 - np.round((t0 - LIT_T0_BTJD) / period) * period
     return t0, period
 
-
-# ---- Transit model ----
-
 @functools.cache
 def limb_darkening():
-    """Quadratic TESS-band limb darkening from LDTk, cached to LD_CACHE_FILE."""
+    '''Quadratic TESS-band limb darkening from LDTk, cached to LD_CACHE_FILE.'''
     if os.path.exists(LD_CACHE_FILE):
         with open(LD_CACHE_FILE) as f:
             return json.load(f)
@@ -168,9 +160,8 @@ def limb_darkening():
         json.dump(meta, f)
     return meta
 
-
 def batman_params(rp_rs=RP_RS, period=100.0):
-    """batman parameters for the fixed Esparza-Borges et al. (2022) shape."""
+    '''batman parameters for the fixed Esparza-Borges et al. (2022) shape.'''
     ld = limb_darkening()
     params = batman.TransitParams()
     params.t0 = 0.0
@@ -184,18 +175,16 @@ def batman_params(rp_rs=RP_RS, period=100.0):
     params.limb_dark = 'quadratic'
     return params
 
-
 def model_depth_ppm(rp_rs):
-    """Mid-transit depth (ppm) of the limb-darkened model. With this star's limb darkening and b ~ 0.5 this is ~3710 ppm for k_app, not (Rp/Rs)^2 = 3272 ppm."""
+    '''Mid-transit depth (ppm) of the limb-darkened model. With this star's limb darkening and b ~ 0.5 this is ~3710 ppm for k_app, not (Rp/Rs)^2 = 3272 ppm.'''
     params = batman_params(rp_rs)
     flux_mid = batman.TransitModel(params, np.array([0.0])).light_curve(params)[0]
     return (1.0 - flux_mid) * 1e6
 
-
 def measure_transit_depth(time, flat_flux, flux_err, t0, period):
-    """Fit Rp/Rs freely (a/Rs, inc and LD fixed) to the phase-folded light curve, as a check on RP_RS."""
+    '''Fit Rp/Rs freely (a/Rs, inc and LD fixed) to the phase-folded light curve, as a check on RP_RS.'''
     phase_hr = fold_phase(time, period, t0)
-    keep = np.abs(phase_hr) < FIT_HALF_WINDOW_HOURS
+    keep = np.abs(phase_hr) < FIT_HALF_WINDOW_HR
     params = batman_params(period=period)
 
     def model(t, rp, baseline):
@@ -220,14 +209,11 @@ def measure_transit_depth(time, flat_flux, flux_err, t0, period):
         'depth_ktrue_ppm': depth_ktrue_ppm,
         'closer_to': 'k_true' if closer else 'k_app',
         'rp_rs_used_for_timing': RP_RS,
-        'half_window_hr': FIT_HALF_WINDOW_HOURS,
+        'half_window_hr': FIT_HALF_WINDOW_HR,
     }
 
-
-# ---- Transit timing ----
-
 def red_noise_beta(residuals, cadence_days, duration_days):
-    """Red-noise beta factor (Winn et al. 2008): binned scatter over the white-noise expectation."""
+    '''Red-noise beta factor (Winn et al. 2008): binned scatter over the white-noise expectation.'''
     bin_size = int(np.round(duration_days / cadence_days))
     if bin_size < 2 or len(residuals) < 2 * bin_size:
         return 1.0
@@ -236,9 +222,8 @@ def red_noise_beta(residuals, cadence_days, duration_days):
     beta = np.std(binned) / (np.std(residuals) / np.sqrt(bin_size))
     return max(1.0, beta)
 
-
 def fit_transit_times(time, flux, flux_err, sector, t0_seed, period_seed):
-    """Fit T0 for each transit (fixed-shape model times a local linear baseline). Errors are inflated by the red-noise beta factor."""
+    '''Fit T0 for each transit (fixed-shape model times a local linear baseline). Errors are inflated by the red-noise beta factor.'''
     params = batman_params(period=period_seed)
     depth = model_depth_ppm(RP_RS) / 1e6
 
@@ -248,7 +233,7 @@ def fit_transit_times(time, flux, flux_err, sector, t0_seed, period_seed):
 
     for n in range(first, last + 1):
         expected_t0 = t0_seed + n * period_seed
-        win = np.abs(time - expected_t0) < (FIT_HALF_WINDOW_HOURS / 24.0)
+        win = np.abs(time - expected_t0) < (FIT_HALF_WINDOW_HR / 24.0)
         if np.sum(win) < MIN_DATAPOINTS:
             continue
 
@@ -290,9 +275,8 @@ def fit_transit_times(time, flux, flux_err, sector, t0_seed, period_seed):
     epochs = np.round((t0s - LIT_T0_BTJD) / LIT_PERIOD)  # E = 0 is the literature T0
     return epochs, t0s, np.array(t0_errs), np.array(snrs), np.array(betas), np.array(sectors)
 
-
 def jackknife_mask(epochs, t0s, t0_errs):
-    """True for epochs within JACKKNIFE_SIGMA_THRESH sigma of a linear fit to the others."""
+    '''True for epochs within JACKKNIFE_SIGMA sigma of a linear fit to the others.'''
     n = len(epochs)
     w = 1.0 / t0_errs
     resid = np.zeros(n)
@@ -303,11 +287,10 @@ def jackknife_mask(epochs, t0s, t0_errs):
         e = epochs[i]
         pred_var = (e ** 2) * cov[0, 0] + 2.0 * e * cov[0, 1] + cov[1, 1]
         resid[i] = np.abs(t0s[i] - np.polyval(coeffs, e)) / np.sqrt(t0_errs[i] ** 2 + max(pred_var, 0.0))
-    return resid < JACKKNIFE_SIGMA_THRESH
-
+    return resid < JACKKNIFE_SIGMA
 
 def fit_linear_ephemeris(epochs, t0s, t0_errs):
-    """Weighted linear fit of T0 vs. epoch. Epochs count from LIT_T0_BTJD, so the intercept is the refined T0. Errors come from the unscaled covariance; chi2/dof ('scale_factor') is only a diagnostic."""
+    '''Weighted linear fit of T0 vs. epoch. Epochs count from LIT_T0_BTJD, so the intercept is the refined T0. Errors come from the unscaled covariance; chi2/dof ('scale_factor') is only a diagnostic.'''
     w = 1.0 / t0_errs
     (period, t0), cov = np.polyfit(epochs, t0s, deg=1, w=w, cov='unscaled')
     _, cov_scaled = np.polyfit(epochs, t0s, deg=1, w=w, cov=True)
@@ -325,9 +308,8 @@ def fit_linear_ephemeris(epochs, t0s, t0_errs):
         't0_diff_sigma': (t0 - LIT_T0_BTJD) / np.sqrt(t0_err ** 2 + LIT_T0_ERR ** 2),
     }
 
-
 def curvature_test(epochs, t0s, t0_errs, period):
-    """Linear vs. quadratic ephemeris (F-test, delta BIC) and the implied Pdot."""
+    '''Linear vs. quadratic ephemeris (F-test, delta BIC) and the implied Pdot.'''
     w = 1.0 / t0_errs
     n = len(epochs)
     # Centered epochs keep the quadratic fit well conditioned; chi2 and the quadratic term don't change
@@ -357,11 +339,8 @@ def curvature_test(epochs, t0s, t0_errs, period):
         'pdot_limit_ms_yr': 2.0 * min_quad / period * 86400e3 * 365.25,
     }
 
-
-# ---- Outputs ----
-
 def write_oc_table(epochs, t0s, t0_errs, snrs, sectors, betas, used, eph):
-    """Per-transit T0s and O-C against the refined ephemeris."""
+    '''Per-transit T0s and O-C against the refined ephemeris.'''
     oc_min = (t0s - (eph['t0'] + epochs * eph['period'])) * 24.0 * 60.0
     with open(f'{STAR_ID}_OC_table.csv', 'w', newline='') as f:
         writer = csv.writer(f)
@@ -369,9 +348,8 @@ def write_oc_table(epochs, t0s, t0_errs, snrs, sectors, betas, used, eph):
         for i in np.argsort(epochs, kind='stable'):
             writer.writerow([int(epochs[i]), f'{t0s[i]:.6f}', f'{t0_errs[i]:.6f}', f'{oc_min[i]:.3f}', f'{snrs[i]:.1f}', int(sectors[i]), f'{betas[i]:.3f}', bool(used[i])])
 
-
-def write_metadata(eph, curvature, depth, fig_stats, rms_lit, rms_ref, epochs, n_rej, sector, transit_baseline_days, photometric_baseline_days):
-    """Summary JSON for the Zenodo deposit."""
+def write_metadata(eph, curvature, depth, fig_stats, rms_lit, rms_ref, epochs, n_rej, sector, transit_span, photometric_span):
+    '''Summary JSON for the Zenodo deposit.'''
     sectors = np.unique(sector)
     payload = {
         'dataset_title': 'A Refined Orbital Period for TOI-4479 b from an Extended TESS Baseline: Transit-Timing Data',
@@ -409,8 +387,8 @@ def write_metadata(eph, curvature, depth, fig_stats, rms_lit, rms_ref, epochs, n
             'n_transits_used': len(epochs), 'n_transits_rejected': n_rej,
             'epoch_range': [int(np.min(epochs)), int(np.max(epochs))],
             'n_sectors': len(sectors), 'sectors': [int(s) for s in sectors],
-            'transit_baseline_days': transit_baseline_days,          # first to last adopted T0
-            'photometric_baseline_days': photometric_baseline_days,  # full light-curve span
+            'transit_baseline_days': transit_span,          # first to last adopted T0
+            'photometric_baseline_days': photometric_span,  # full light-curve span
         },
         'data_source': {
             'facility': 'TESS', 'pipeline': 'SPOC', 'quality_bitmask': QUALITY_BITMASK,
@@ -428,17 +406,13 @@ def write_metadata(eph, curvature, depth, fig_stats, rms_lit, rms_ref, epochs, n
     with open(f'{STAR_ID}_ephemeris_metadata.json', 'w') as f:
         json.dump(payload, f, indent=2)
 
-
-# ---- Figure ----
-
 def fold_phase(time, period, t0):
-    """Phase-fold on `period` around `t0`; returns hours from mid-transit."""
+    '''Phase-fold on `period` around `t0`; returns hours from mid-transit.'''
     phase = ((time - t0 + 0.5 * period) % period) - 0.5 * period
     return phase * 24.0
 
-
 def bin_phase(phase_hours, flux, bin_width_min=PHASE_BIN_MINUTES):
-    """Bin a phase-folded light curve. Returns bin centers, median flux and SEM."""
+    '''Bin a phase-folded light curve. Returns bin centers, median flux and SEM.'''
     bin_width_hr = bin_width_min / 60.0
     edges = np.arange(phase_hours.min(), phase_hours.max() + bin_width_hr, bin_width_hr)
     idx = np.digitize(phase_hours, edges)
@@ -453,15 +427,13 @@ def bin_phase(phase_hours, flux, bin_width_min=PHASE_BIN_MINUTES):
         sems.append(np.std(flux[m]) / np.sqrt(n) if n > 1 else np.nan)
     return np.array(centers), np.array(meds), np.array(sems)
 
-
-# Paul Tol's (2021) colorblind-safe "muted" palette, without sand and wine
-_SECTOR_PALETTE = ["#332288", "#44AA99", "#CC6677", "#117733", "#88CCEE", "#999933"]
+# Paul Tol's (2021) colorblind-safe 'muted' palette, without sand and wine
+_SECTOR_PALETTE = ['#332288', '#44AA99', '#CC6677', '#117733', '#88CCEE', '#999933']
 _SECTOR_MARKERS = ['o', 's', '^', 'D', 'v', 'P']
 _SECTOR_LINESTYLES = ['-', '--', '-.', ':', (0, (3, 1, 1, 1)), (0, (5, 1))]
 
-
 def _cluster_epochs(epochs):
-    """Group epochs into clusters (one per sector, in practice) split at large gaps."""
+    '''Group epochs into clusters (one per sector, in practice) split at large gaps.'''
     order = np.argsort(epochs)
     diffs = np.diff(epochs[order])
     threshold = max(float(np.median(diffs[diffs > 0])) * 6.0, 15.0)
@@ -472,9 +444,8 @@ def _cluster_epochs(epochs):
         groups[-1].append(order[i + 1])
     return groups
 
-
 def _cluster_layout(epochs, cluster_idx, pad_frac=0.3, min_pad=3.0):
-    """(lo, hi, pad) x-range for each epoch cluster, plus their relative widths."""
+    '''(lo, hi, pad) x-range for each epoch cluster, plus their relative widths.'''
     layout = []
     for idxs in cluster_idx:
         e_sub = epochs[np.asarray(idxs)]
@@ -483,9 +454,8 @@ def _cluster_layout(epochs, cluster_idx, pad_frac=0.3, min_pad=3.0):
     widths = [(hi - lo) + 2 * pad for lo, hi, pad in layout]
     return layout, widths
 
-
 def _style_broken_axes(axes_group, cluster_layout):
-    """Hide the inner spines of a broken-axis group and draw the diagonal break marks."""
+    '''Hide the inner spines of a broken-axis group and draw the diagonal break marks.'''
     n = len(axes_group)
     d = 0.018
     # d is in axes-fraction units, so scale dx by panel width to keep the marks the same size
@@ -520,9 +490,8 @@ def _style_broken_axes(axes_group, cluster_layout):
             ax.plot([-dx, dx], [-d, d], **kwargs)
             ax.plot([-dx, dx], [1 - d, 1 + d], **kwargs)
 
-
 def _width_ratios(cluster_widths, cluster_layout, period):
-    """Column widths for the broken axis, with a spacer between clusters that grows (logarithmically) with the time skipped."""
+    '''Column widths for the broken axis, with a spacer between clusters that grows (logarithmically) with the time skipped.'''
     gap_days = [(cluster_layout[i + 1][0] - cluster_layout[i][1]) * period for i in range(len(cluster_layout) - 1)]
     ref = float(np.median(cluster_widths))
     spacers = [float(np.clip(ref * 0.07 * np.log10(g + 1.0), ref * 0.06, ref * 0.22)) for g in gap_days]
@@ -534,9 +503,8 @@ def _width_ratios(cluster_widths, cluster_layout, period):
         col_idx.append(len(widths) - 1)
     return widths, col_idx
 
-
 def _plot_oc_panel(axes_group, cluster_idx, cluster_layout, epochs, t0s, t0_errs, sec, rej_epochs, rej_t0s, rej_errs, ref_t0, ref_p, unique_sectors, sector_colors, sector_markers, ylim, fit_trend):
-    """O-C vs. epoch on a broken-axis group, colored by sector, optionally with a linear trend and its 1-sigma band."""
+    '''O-C vs. epoch on a broken-axis group, colored by sector, optionally with a linear trend and its 1-sigma band.'''
     reject_color, trend_color = '#767676', '#262B33'
     oc_min = (t0s - (ref_t0 + epochs * ref_p)) * 24.0 * 60.0
     oc_err_min = t0_errs * 24.0 * 60.0
@@ -582,9 +550,8 @@ def _plot_oc_panel(axes_group, cluster_idx, cluster_layout, epochs, t0s, t0_errs
         h_trend.set_label('Drift fit ($\\pm1\\sigma$)')
     return h_rej, h_trend
 
-
 def _plot_phase_panel(ax, t, f, sec, per, t0, unique_sectors, sector_colors, sector_markers, sector_linestyles, model_ph_hr, model_flux, adopted_epochs, adopted_t0, adopted_sectors):
-    """Phase-fold on (t0, per): faint binned data plus one model outline per sector, shifted by the mean O-C of that sector's transits. Returns the spread (min) between the sectors' shifts."""
+    '''Phase-fold on (t0, per): faint binned data plus one model outline per sector, shifted by the mean O-C of that sector's transits. Returns the spread (min) between the sectors' shifts.'''
     phase = fold_phase(t, per, t0)
     keep = np.abs(phase) < PHASE_FOLD_WINDOW_HR
     phase, f, sec = phase[keep], f[keep], sec[keep]
@@ -608,17 +575,16 @@ def _plot_phase_panel(ax, t, f, sec, per, t0, unique_sectors, sector_colors, sec
     ax.set_ylabel('Relative flux (ppm)')
     return (np.max(shifts_hr) - np.min(shifts_hr)) * 60.0
 
-
 def _draw_depth_label(ax, depth_val_ppm):
-    """Dotted guide line at the model depth, labelled on the y-axis."""
-    depth_color = "#EE7733"  # Tol 'orange', not used by any sector
+    '''Dotted guide line at the model depth, labelled on the y-axis.'''
+    depth_color = '#EE7733'  # Tol 'orange', not used by any sector
 
     ax.figure.canvas.draw()  # so the y-ticks are final
     ylo, yhi = ax.get_ylim()
     yticks = np.array([t for t in ax.get_yticks() if ylo <= t <= yhi])
 
     def _fmt(v):
-        return f'{v:.0f}'.replace('-', '−')  # same minus sign as the tick labels
+        return f'{v:.0f}'.replace('-', '\u2212')  # same minus sign as the tick labels
 
     ax.plot([-PHASE_FOLD_WINDOW_HR, 0], [depth_val_ppm, depth_val_ppm], ls=':', color=depth_color, lw=1.1, zorder=6, clip_on=False)
 
@@ -634,9 +600,8 @@ def _draw_depth_label(ax, depth_val_ppm):
     ax.annotate(_fmt(depth_val_ppm), xy=(0, depth_val_ppm), xycoords=('axes fraction', 'data'), xytext=(-4, 0), textcoords='offset points', ha='right', va='center', fontsize=13, color=depth_color, zorder=7, annotation_clip=False)
     ax.figure.canvas.draw()
 
-
 def make_figure(time, flat_flux, sector, epochs, t0s, t0_errs, epoch_sectors, rej_epochs, rej_t0s, rej_errs, eph):
-    """Figure 1. Left: O-C vs. epoch for the literature (a) and refined (b) ephemerides. Right: phase folds on the literature (c) and refined (d) ephemerides."""
+    '''Figure 1. Left: O-C vs. epoch for the literature (a) and refined (b) ephemerides. Right: phase folds on the literature (c) and refined (d) ephemerides.'''
     refined_t0, refined_p = eph['t0'], eph['period']
 
     # Leave jackknife-rejected transits out of the phase folds
@@ -748,7 +713,6 @@ def make_figure(time, flat_flux, sector, epochs, t0s, t0_errs, epoch_sectors, re
 
     return {'spread_lit': spread_lit, 'spread_ref': spread_ref, 'future_label': 'Jan 2027', 'future_offset_min': future_shift_hr * 60.0, 'future_offset_sigma_min': future_sigma_min}
 
-
 def main():
     time, flux, flux_err, sector = fetch_data()
     flat_flux = detrend(time, flux, sector)
@@ -774,21 +738,13 @@ def main():
     write_metadata(eph, curvature, depth, fig_stats, rms_lit, rms_ref, epochs[used], int(np.sum(rej)), sector, t0s[used].max() - t0s[used].min(), time.max() - time.min())
 
     print(f'{np.sum(used)} transits used, {np.sum(rej)} rejected')
-    print(f"T0 = {eph['t0']:.5f} +/- {eph['t0_err']:.5f} BTJD, "
-          f"P = {eph['period']:.7f} +/- {eph['period_err']:.7f} d, chi2/dof = {eph['scale_factor']:.2f}")
-    print(f"vs. Kokori et al. (2026): dP = {eph['delta_p_sec']:+.1f} s ({eph['delta_p_sigma']:+.2f} sigma), "
-          f"dT0 = {eph['t0_diff_min']:+.2f} min ({eph['t0_diff_sigma']:+.2f} sigma)")
+    print('T0 = {t0:.5f} +/- {t0_err:.5f} BTJD, P = {period:.7f} +/- {period_err:.7f} d, chi2/dof = {scale_factor:.2f}'.format(**eph))
+    print('vs. Kokori et al. (2026): dP = {delta_p_sec:+.1f} s ({delta_p_sigma:+.2f} sigma), dT0 = {t0_diff_min:+.2f} min ({t0_diff_sigma:+.2f} sigma)'.format(**eph))
     print(f'O-C RMS: {rms_lit:.2f} min (literature), {rms_ref:.2f} min (refined)')
-    print(f"Sector spread in the phase fold: {fig_stats['spread_lit']:.1f} min (literature), "
-          f"{fig_stats['spread_ref']:.1f} min (refined)")
-    print(f"Literature ephemeris offset by Jan 2027: {fig_stats['future_offset_min']:+.1f} "
-          f"+/- {fig_stats['future_offset_sigma_min']:.1f} min")
-    print(f"Curvature: delta BIC = {curvature['delta_bic']:+.2f}, p = {curvature['p_value']:.2f}, "
-          f"Pdot = {curvature['pdot_ms_yr']:+.1f} +/- {curvature['pdot_err_ms_yr']:.1f} ms/yr "
-          f"(3-sigma limit ~{curvature['pdot_limit_ms_yr']:.0f} ms/yr)")
-    print(f"Free Rp/Rs = {depth['rp_rs_fit']:.4f} +/- {depth['rp_rs_fit_err']:.4f} "
-          f"(depth {depth['depth_ppm']:.0f} +/- {depth['depth_err_ppm']:.0f} ppm)")
-
+    print('Sector spread in the phase fold: {spread_lit:.1f} min (literature), {spread_ref:.1f} min (refined)'.format(**fig_stats))
+    print('Literature ephemeris offset by Jan 2027: {future_offset_min:+.1f} +/- {future_offset_sigma_min:.1f} min'.format(**fig_stats))
+    print('Curvature: delta BIC = {delta_bic:+.2f}, p = {p_value:.2f}, Pdot = {pdot_ms_yr:+.1f} +/- {pdot_err_ms_yr:.1f} ms/yr (3-sigma limit ~{pdot_limit_ms_yr:.0f} ms/yr)'.format(**curvature))
+    print('Free Rp/Rs = {rp_rs_fit:.4f} +/- {rp_rs_fit_err:.4f} (depth {depth_ppm:.0f} +/- {depth_err_ppm:.0f} ppm)'.format(**depth))
 
 if __name__ == '__main__':
     main()
